@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PALITA OX Game 💖</title>
+<style>
+:root{
+  --bg:#ffe6f9;
+  --card:#fff0fb;
+  --accent:#ff79c6;
+  --accent2:#ff9bd2;
+  --muted:#aa76a8;
+  --text:#3a1a3a;
+  --overlay-bg:rgba(255,182,193,0.95);
+}
+*{box-sizing:border-box;font-family:'Poppins',sans-serif;}
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--text);
+  position:relative;
+  overflow:hidden;
+  background: var(--bg);
+}
+.wrap{width:900px;max-width:95%;display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start;position:relative;z-index:1;}
+.card{background:var(--card);border-radius:20px;padding:20px;box-shadow:0 6px 24px rgba(255,153,204,0.4);}
+header{display:flex;gap:10px;align-items:center;}
+header h1{margin:0;font-size:22px;color:var(--accent);}
+.subtitle{color:var(--muted);font-size:14px;}
+.controls{display:flex;flex-direction:column;gap:12px;margin-top:10px;}
+.btn{background:var(--accent);color:white;padding:8px 12px;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform .2s;}
+.btn:hover{transform:translateY(-3px);}
+.btn.secondary{background:white;color:var(--accent);border:2px solid var(--accent);}
+.board-wrap{display:flex;flex-direction:column;gap:14px;align-items:center;}
+.board{width:330px;height:330px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:white;padding:10px;border-radius:16px;box-shadow:inset 0 0 10px rgba(255,100,180,0.3);}
+.cell{display:flex;align-items:center;justify-content:center;font-size:60px;background:var(--accent2);color:white;border-radius:12px;cursor:pointer;transition:background .2s,transform .2s;}
+.cell:hover{background:var(--accent);transform:scale(1.05);}
+.score{display:flex;gap:10px;font-weight:600;color:var(--accent);}
+.footer{text-align:center;color:var(--muted);font-size:13px;margin-top:4px;}
+.overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;background:var(--overlay-bg);
+  display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;
+  transition:opacity .3s;
+  z-index:10;
+}
+.overlay.show{
+  opacity:1;pointer-events:auto;
+}
+.overlay-content{
+  background:white;border-radius:20px;padding:40px 60px;text-align:center;
+  font-size:24px;color:var(--accent);box-shadow:0 8px 30px rgba(255,0,128,0.3);
+  animation:popIn 0.4s ease-out;
+}
+@keyframes popIn{
+  0%{transform:scale(0.5);opacity:0;}
+  100%{transform:scale(1);opacity:1;}
+}
+/* Background bubbles */
+.bubble{
+  position:absolute;
+  border-radius:50%;
+  opacity:0.3;
+  pointer-events:none;
+  animation:bubbleMove linear infinite;
+}
+@keyframes bubbleMove{
+  0%{transform:translateY(100vh);}
+  100%{transform:translateY(-50vh);}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <header>
+      <div style="font-size:28px">💖</div>
+      <div>
+        <h1>PALITA OX Game</h1>
+        <div class="subtitle">เล่นเกม OX กับเพื่อนหรือบอทน่ารักๆ</div>
+      </div>
+    </header>
+    <div class="controls">
+      <button class="btn" id="mode-human">เล่นกับเพื่อน 🧸</button>
+      <button class="btn secondary" id="mode-bot">เล่นกับบอท 🤖</button>
+      <div id="difficulty-row" style="display:none">
+        <p style="margin:4px 0;color:var(--muted)">ระดับความยากของบอท:</p>
+        <label><input type="radio" name="difficulty" value="easy"> ง่าย 🍼</label>
+        <label><input type="radio" name="difficulty" value="medium"> ปานกลาง 🐱</label>
+        <label><input type="radio" name="difficulty" value="hard" checked> ยาก 💎</label>
+      </div>
+      <button class="btn secondary" id="share">แชร์ลิงก์ 💌</button>
+    </div>
+  </div>
+
+  <div class="card board-wrap">
+    <div class="score">
+      <div>X: <span id="score-x">0</span></div>
+      <div>O: <span id="score-o">0</span></div>
+      <div>เสมอ: <span id="score-d">0</span></div>
+    </div>
+    <div class="board" id="board"></div>
+    <button class="btn" id="new-game">เริ่มใหม่ ✨</button>
+    <div class="footer" id="log">ตานี้: X</div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-content" id="overlay-text">X ชนะ!</div>
+</div>
+
+<script>
+const boardElem = document.getElementById('board');
+const log = document.getElementById('log');
+const newGameBtn = document.getElementById('new-game');
+const modeHumanBtn = document.getElementById('mode-human');
+const modeBotBtn = document.getElementById('mode-bot');
+const difficultyRow = document.getElementById('difficulty-row');
+const overlay = document.getElementById('overlay');
+const overlayText = document.getElementById('overlay-text');
+const shareBtn = document.getElementById('share');
+
+let board = Array(9).fill('');
+let turn = 'X';
+let mode = 'human';
+let difficulty = 'hard';
+
+// คะแนน
+let scoreX = 0;
+let scoreO = 0;
+let scoreD = 0;
+
+// สร้างกระดาน
+for(let i=0;i<9;i++){
+  const c = document.createElement('div');
+  c.className='cell';
+  c.dataset.index=i;
+  c.addEventListener('click',()=>clickCell(i));
+  boardElem.appendChild(c);
+}
+
+function render(){
+  document.querySelectorAll('.cell').forEach((c,i)=>c.textContent=board[i]);
+}
+
+const winningCombos = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+function checkWinner(b){
+  for(const combo of winningCombos){
+    const [a,b1,c] = combo;
+    if(b[a] && b[a] === b[b1] && b[a] === b[c]) return b[a];
+  }
+  return null;
+}
+
+function showOverlay(message){
+  overlayText.textContent = message;
+  overlay.classList.add('show');
+  setTimeout(()=>overlay.classList.remove('show'),1500);
+}
+
+function clickCell(i){
+  if(board[i] || checkWinner(board)) return;
+  if(mode==='bot' && turn==='O') return;
+  board[i] = turn;
+  updateGame();
+}
+
+function updateGame(){
+  render();
+  const winner = checkWinner(board);
+  if(winner){
+    log.textContent = `${winner} คุณชนะตานี้แล้ว! 💖`;
+    showOverlay(`${winner} คุณชนะตานี้แล้ว! 🎉`);
+
+    if(winner==='X') scoreX++;
+    else if(winner==='O') scoreO++;
+
+    document.getElementById('score-x').textContent = scoreX;
+    document.getElementById('score-o').textContent = scoreO;
+
+    return;
+  }
+  if(!board.includes('')){
+    log.textContent='ผู้เล่นคะแนนเสมอกันนะ 💕';
+    showOverlay('ผู้เล่นคะแนนเสมอกันนะ! 🤝');
+    scoreD++;
+    document.getElementById('score-d').textContent = scoreD;
+    return;
+  }
+  turn = turn==='X'?'O':'X';
+  log.textContent='ตานี้: '+turn;
+  if(mode==='bot' && turn==='O') setTimeout(botMove,400);
+}
+
+function botMove(){
+  const empty = board.map((v,i)=>v?null:i).filter(v=>v!==null);
+  let move;
+
+  if(difficulty==='easy'){
+    move = empty[Math.floor(Math.random()*empty.length)];
+  } else if(difficulty==='medium'){
+    if(Math.random() < 0.5){
+      move = empty.find(i=>{ board[i]='O'; const win=checkWinner(board); board[i]=''; return win==='O'; }) ||
+             empty.find(i=>{ board[i]='X'; const win=checkWinner(board); board[i]=''; return win==='X'; }) ||
+             empty[Math.floor(Math.random()*empty.length)];
+    } else {
+      move = empty[Math.floor(Math.random()*empty.length)];
+    }
+  } else {
+    if(Math.random() < 0.95){
+      move = minimax(board,'O').index;
+    } else {
+      move = empty[Math.floor(Math.random()*empty.length)];
+    }
+  }
+
+  board[move]='O';
+  updateGame();
+}
+
+function minimax(newBoard, player){
+  const avail = newBoard.map((v,i)=>v?null:i).filter(v=>v!==null);
+  const winner = checkWinner(newBoard);
+  if(winner==='X') return {score: -10};
+  if(winner==='O') return {score: 10};
+  if(avail.length===0) return {score:0};
+
+  const moves = [];
+  for(let i of avail){
+    const move = {};
+    move.index = i;
+    newBoard[i] = player;
+    const result = minimax(newBoard, player==='O'?'X':'O');
+    move.score = result.score;
+    newBoard[i]='';
+    moves.push(move);
+  }
+
+  let bestMove;
+  if(player==='O'){
+    let bestScore = -Infinity;
+    moves.forEach(m=>{if(m.score>bestScore){bestScore=m.score;bestMove=m;}});
+    return bestMove;
+  } else {
+    let bestScore = Infinity;
+    moves.forEach(m=>{if(m.score<bestScore){m.score<bestScore;bestMove=m;}});
+    return bestMove;
+  }
+}
+
+// ปุ่มต่างๆ
+newGameBtn.addEventListener('click',()=>{
+  board = Array(9).fill('');
+  turn = 'X';
+  render();
+  log.textContent = 'ตานี้: X';
+});
+modeHumanBtn.addEventListener('click',()=>{
+  mode='human';
+  difficultyRow.style.display='none';
+  board = Array(9).fill('');
+  turn='X';
+  render();
+  log.textContent='ตานี้: X';
+});
+modeBotBtn.addEventListener('click',()=>{
+  mode='bot';
+  difficultyRow.style.display='block';
+  board = Array(9).fill('');
+  turn='X';
+  render();
+  log.textContent='เกมส์นี้: X เป็นผู้เล่น';
+});
+document.querySelectorAll('input[name="difficulty"]').forEach(r=>r.addEventListener('change',e=>difficulty=e.target.value));
+render();
+
+// สร้างฟองสบู่พื้นหลัง
+function createBubbles() {
+  const colors = ['#ff9bd2','#ff79c6','#ffd1e6','#ffe6f9','#ffb3d9'];
+  const gap = 80;
+  for(let y=0;y<window.innerHeight;y+=gap){
+    for(let x=0;x<window.innerWidth;x+=gap){
+      const b = document.createElement('div');
+      b.className='bubble';
+      b.style.left = x+'px';
+      b.style.bottom = '-50px';
+      b.style.width = b.style.height = 20 + Math.random()*20 + 'px';
+      b.style.background = colors[Math.floor(Math.random()*colors.length)];
+      b.style.animationDuration = (6 + Math.random()*4) + 's';
+      document.body.appendChild(b);
+    }
+  }
+}
+createBubbles();
+
+// ปุ่มแชร์
+shareBtn.addEventListener('click',()=>{
+  const shareText = 'มาเล่นเกม Cutie OX น่ารักด้วยกัน! 💖';
+  if(navigator.share){
+    navigator.share({title:'Cutie OX Game', text:shareText, url:window.location.href});
+  } else {
+    prompt('คัดลอกลิงก์ไปแชร์:', window.location.href);
+  }
+});
+</script>
+</body>
+</html>
